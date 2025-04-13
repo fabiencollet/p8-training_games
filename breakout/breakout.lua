@@ -47,7 +47,7 @@ end
 
 
 function init_racket()
- racket_width = 24
+	racket_width = 24
 	racket_height = 4
 	racket_x = 64-(racket_width/2)
 	racket_speed = 2
@@ -64,10 +64,15 @@ function add_ball(x, y, radius, vel_x, vel_y, power)
 end
 
 function load_bricks_map(level, debug)
+	local brick = {}
     for y=0, 7 do
-        bricks_table[y] = {}
         for x=0, 15 do
-            bricks_table[y][x] = mget(x, y+8*level) - brick_start_index
+			brick = {
+				["x"] = x,
+				["y"] = y,
+				["life"] = mget(x, y+8*level) - brick_start_index,
+			}
+            add(bricks_table, brick)
         end
     end
     -- debug
@@ -143,30 +148,122 @@ function ball_brick_colide(ball)
     if ball["y"] - ball["radius"] - 1 <= bricks_offset_y then return end
     if ball["y"] - ball["radius"] - 1 > bricks_offset_y+(brick_height*8) then return end
 
-    printh("Collide")
 
-	-- top
-	if ball["y"] - ball["radius"] - 1 <= header_h then
-		if ball["vel_y"] < 0 then
-			ball["vel_y"] *= -1
+	local ball_top_left = {
+		["x"] = ball["x"] - ball["radius"] - 1,
+		["y"] = ball["y"] - ball["radius"] - 1
+	}
+	local ball_top_right = {
+		["x"] = ball["x"] + ball["radius"] + 1,
+		["y"] = ball["y"] - ball["radius"] - 1
+	}
+	local ball_down_left = {
+		["x"] = ball["x"] - ball["radius"] - 1,
+		["y"] = ball["y"] + ball["radius"] + 1
+	}
+	local ball_down_right = {
+		["x"] = ball["x"] + ball["radius"] + 1,
+		["y"] = ball["y"] + ball["radius"] + 1
+	}
+
+	for brick in all(bricks_table) do
+
+		if brick.life <= 0 then goto continue end
+		local brick_x = brick_width * brick.x
+		local brick_y = (brick_height * brick.y) + bricks_offset_y
+
+		local collide_x = false
+		local collide_y = false
+		
+		-- Top Left --
+		if ball_top_left.x >= brick_x and ball_top_left.x <= brick_x + brick_width - 1 then
+			if ball_top_left.y >= brick_y then
+				if ball_top_left.y <= brick_y + brick_height then
+					if ball["vel_y"] < 0 then
+						collide_y = true
+						goto collide
+					end
+				end
+				if ball_top_left.y - 1 <= brick_y + brick_height then
+					if ball["vel_x"] > 0 then
+						collide_x = true
+						goto collide
+					end
+				end
+			end
 		end
-		return true
+		-- Top Right --
+		if ball_top_right.x >= brick_x and ball_top_right.x <= brick_x + brick_width - 1 then
+			if ball_top_right.y >= brick_y then
+				if ball_top_right.y <= brick_y + brick_height then
+					if ball["vel_y"] < 0 then
+						collide_y = true
+						goto collide
+					end
+				end
+				if ball_top_right.y - 1 <= brick_y + brick_height then
+					if ball["vel_x"] < 0 then
+						collide_x = true
+						goto collide
+					end
+				end
+			end
+		end
+
+		-- Bottom Left --
+		if ball_down_left.x >= brick_x and ball_down_left.x <= brick_x + brick_width - 1 then
+			if ball_down_left.y <= brick_y + brick_height then
+				if ball_down_left.y >= brick_y then
+					if ball["vel_y"] > 0 then
+						collide_y = true
+						goto collide
+					end
+				end
+				if ball_down_left.y + 1 >= brick_y then
+					if ball["vel_x"] < 0 then
+						collide_x = true
+						goto collide
+					end
+				end
+			end
+		end
+
+		-- Bottom Right --
+		if ball_down_right.x >= brick_x and ball_down_right.x <= brick_x + brick_width - 1 then
+			if ball_down_right.y <= brick_y + brick_height then
+				if ball_down_right.y >= brick_y then
+					if ball["vel_y"] > 0 then
+						collide_y = true
+						goto collide
+					end
+				end
+				if ball_down_right.y + 1 >= brick_y then
+					if ball["vel_x"] > 0 then
+						collide_x = true
+						goto collide
+					end
+				end
+			end
+		end
+
+		::collide::
+		if collide_x or collide_y then
+			brick.life -= 1
+			if collide_x then
+				ball["vel_x"] *= -1
+			end
+			if collide_y then
+				ball["vel_y"] *= -1
+			end
+			score += 1
+			return true
+		end
+
+		::continue::
 	end
+
+
 	
-	-- left
-	if ball["x"] - ball["radius"] - 1 <= 0 then
-		if ball["vel_x"] < 0 then
-			ball["vel_x"] *= -1
-		end
-		return true
-	end
-	-- right
-	if ball["x"] + ball["radius"] + 1 >= 127 then
-		if ball["vel_x"] > 0 then
-			ball["vel_x"] *= -1
-		end
-		return true
-	end
 	return false
 end
 
@@ -218,14 +315,16 @@ end
 
 
 function draw_bricks_table(bricks_table)
-    for y=0, #bricks_table do
-        for x=0, #bricks_table[y] do
-            local brick_life = bricks_table[y][x]
-            -- printh("Brick Life:"..brick_life)
-            if brick_life > 0 then
-                rectfill(brick_width*x, brick_height*y+bricks_offset_y, brick_width*x+brick_width, brick_height*y+bricks_offset_y+brick_height, brick_life)
-            end
-        end
+    for i, brick in ipairs(bricks_table) do
+		-- printh("Brick Life:"..brick_life)
+		if brick["life"] > 0 then
+			rectfill(
+				brick_width * brick["x"],
+				brick_height * brick["y"] + bricks_offset_y,
+				brick_width * brick["x"] + brick_width -1,
+				brick_height * brick["y"] + bricks_offset_y + brick_height -1,
+				brick["life"])
+		end
     end
 end
 
@@ -264,7 +363,7 @@ end
 function _update60()
 	
 	-- 
-	if #balls_table == 0 do
+	if #balls_table == 0 then
 		restart()
 	end
 	
@@ -281,7 +380,6 @@ function _update60()
         -- wall collide
 		if wall_collide or racket_collide then
 			sfx(rnd(2))
-			score += 1
 			shake_duration = 50
 			if shake_amplitude < max_shake_amplitude then
 				shake_amplitude += 0.2
@@ -296,7 +394,7 @@ function _update60()
 		end
 		
         -- bricks collide
-         ball_brick_colide(ball)
+        ball_brick_colide(ball)
 
 		ball["x"] += ball["vel_x"]
 		ball["y"] += ball["vel_y"]
